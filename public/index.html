@@ -10,6 +10,36 @@
         margin: 0;
         padding: 0;
       }
+      body {
+        background-color: #e6f3ff; /* 基础背景色 */
+        background-image: 
+          radial-gradient(circle at 10% 20%, 
+            rgba(255,255,255,0.3) 5%, 
+            transparent 10%),
+          radial-gradient(circle at 90% 80%,
+            rgba(255,255,255,0.2) 8%,
+            transparent 15%),
+          linear-gradient(45deg,
+            rgba(255,255,255,0.1) 25%,
+            transparent 25%,
+            transparent 75%,
+            rgba(255,255,255,0.1) 75%),
+          linear-gradient(45deg,
+            rgba(255,255,255,0.1) 25%,
+            transparent 25%,
+            transparent 75%,
+            rgba(255,255,255,0.1) 75%);
+        background-size: 
+          200px 200px, /* 气泡大小 */
+          150px 150px, /* 气泡大小 */
+          40px 40px,   /* 斜纹大小 */
+          40px 40px;
+        background-position: 
+          20% 30%,     /* 大气泡位置 */
+          80% 70%,     /* 大气泡位置 */
+          0 0,         /* 斜纹偏移 */
+          20px 20px;   /* 斜纹偏移 */
+      }
       .main {
         display: flex;
         flex-direction: column;
