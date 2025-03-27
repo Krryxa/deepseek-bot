@@ -16,6 +16,7 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Methods", "*");
   res.header("Access-Control-Allow-Headers", "*");
   res.header("Access-Control-Max-Age", "86400"); // 缓存 24 小时，减少 OPTIONS 预检请求
+  res.header("Access-Control-Expose-Headers", "x-session-id"); // 允许客户端读取自定义头
   req.sessionId = req.headers["x-session-id"] || uuidv4();
   next();
 });
@@ -34,6 +35,7 @@ app.post("/api/chat", async (req, res) => {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "x-session-id": req.sessionId,
     });
 
     // 流式处理

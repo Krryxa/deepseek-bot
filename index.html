@@ -214,7 +214,7 @@
             headers: {
               "Content-Type": "application/json", // 请求体为 JSON
               Accept: "text/event-stream", // 期望服务端返回 SSE 格式
-              "x-session-id": "08a0dfdb-bc39-4d21-bfa6-5810f87c56a8" // 会话ID
+              "x-session-id": localStorage.getItem('x-session-id') || '' // 会话ID
             },
             body: JSON.stringify({
               message: userMessage, // 传递 message 参数
@@ -224,6 +224,12 @@
           // 检查响应状态
           if (!response.ok) {
             throw new Error(`HTTP错误: ${response.status}`);
+          }
+
+          // 读取响应头 session id，设置缓存
+          const sessionID = response.headers.get('x-session-id');
+          if (sessionID) {
+            localStorage.setItem('x-session-id', sessionID)
           }
 
           // 获取流式读取器
