@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 const AIService = require("./ai-service");
 
@@ -9,6 +10,9 @@ const aiService = new AIService(process.env.DEEPSEEK_API_KEY);
 
 // 中间件
 app.use(express.json());
+// 安全配置：仅托管父级目录中的 public 文件夹
+const staticPath = path.join(__dirname, '..', 'public');
+app.use(express.static(staticPath));
 
 // 会话中间件
 app.use((req, res, next) => {
