@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat with Markdown</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <style>
+      html, body, p {
+        margin: 0;
+        padding: 0;
+      }
+      .main {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+      .header {
+        height: 50px;
+        background: #000000;
+        text-align: center;
+        line-height: 50px;
+        color: #fff;
+      }
+      #stream-output {
+        flex: 1;
+        overflow: auto;
+      }
+      #stream-output > div {
+        margin: 20px;
+        display: flex;
+      }
+      #stream-output > div:last-child {
+        margin-bottom: 0;
+      }
+      #stream-output .user-ask {
+        justify-content: flex-end;
+        color: #000;
+      }
+      #stream-output .user-ask > div {
+        background: #95ec69;
+      }
+      #stream-output .deepseek-res {
+        color: #333;
+      }
+      #stream-output .deepseek-res > div {
+        background: #fbfbfb;
+      }
+      #stream-output .user-ask > div, #stream-output .deepseek-res > div {
+        max-width: 70%;
+        padding: 10px 18px;
+        border-radius: 8px;
+      }
+      .send-container {
+        display: flex;
+        padding: 20px;
+        width: 100%;
+        justify-content: center;
+        box-sizing: border-box;
+      }
+      .send-container input {
+        flex: 1;
+        height: 30px;
+        outline: none;
+        text-indent: 4px;
+      }
+      .send-container .button {
+        background: #07c160;
+        color: #fff;
+        line-height: 36px;
+        padding: 0 18px;
+        border-radius: 0px 4px 4px 0px;
+        margin-left: -2px;
+        pointer-events: none;
+      }
+      .send-container .button.active {
+        cursor: pointer;
+        pointer-events: auto;
+      }
+      /* Markdown 样式 */
+      .markdown-content h1 {
+        font-size: 1.5em;
+        margin: 1em 0;
+      }
+      .markdown-content pre {
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .markdown-content code {
+        font-family: Consolas, Monaco, monospace;
+        background: #f5f5f5;
+      }
+      .markdown-content table {
+        border-collapse: collapse;
+        margin: 1em 0;
+      }
+      .markdown-content td,
+      .markdown-content th {
+        border: 1px solid #ddd;
+        padding: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="main">
+      <div class="header">AI 小助手</div>
+      <div id="stream-output"></div>
+      <div class="send-container">
+        <input id="input" oninput="handleButtonStatus(event)" />
+        <div class="button" onclick="streamChat()">发送</div>
+      </div>
+    </div>
+
+    <!-- 添加 Markdown 解析依赖 -->
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+
+    <script src="./js/render.js"></script>
+
+    <script>
+      // 获取输入内容
+      const getInputContent = () => {
+        const content = document.getElementById("input").value;
+        return content.trim();
+      }
+      // 控制按钮状态
+      const handleButtonStatus = (e) => {
+        const domClass = document.querySelector(".send-container .button").classList
+        if (e?.target.value.trim()) {
+          domClass.add('active')
+        } else {
+          domClass.remove('active')
+        }
+      }
+
+      // 回车发送
+      document.getElementById("input").addEventListener('keydown', function(event) {
+        if (event.key === 'Enter' || event.keyCode === 13) {
+          // 阻止默认的换行行为（如果在textarea中需要换行，需移除这行）
+          event.preventDefault();
+          
+          getInputContent() && document.querySelector(".send-container .button").click();
+        }
+      });
+
+      // 聊天区滚动到底部
+      const handleScrollBottom = () => {
+        const outputContainer = document.getElementById("stream-output");
+        if (outputContainer && outputContainer.scrollHeight > outputContainer.clientHeight) {
+          // 添加微任务延迟确保 DOM 更新完成
+          setTimeout(() => {
+            outputContainer.scrollTo({
+              top: outputContainer.scrollHeight,
+              behavior: "smooth"
+            });
+          }, 0);
+        }
+      }
+
+      // 初始化 Markdown 解析器
+      const md = window.markdownit({
+        html: true,
+        highlight: function (str, lang) {
+          // ignoreIllegals 参数，当解析代码块遇到非法语法 或 ​非法结构时，强制 highlight 继续处理而非抛出异常
+          if (lang && hljs.getLanguage(lang)) {
+            try {
+              return (
+                '<pre class="hljs"><code>' +
+                hljs.highlight(str, { language: lang, ignoreIllegals: true })
+                  .value +
+                "</code></pre>"
+              );
+            } catch (__) {}
+          }
+          return (
+            '<pre class="hljs"><code>' +
+            md.utils.escapeHtml(str) +
+            "</code></pre>"
+          );
+        },
+      });
+
+      // 流式内容缓冲池
+      let fullBuffer = ""; // renderMarkdownSplit 函数：累积所有内容的安全缓冲区
+      let buffer = ""; // renderMarkdown 函数：累计所有内容的缓冲区；renderMarkdownSplit 函数：未处理缓冲区 + 新增内容
+      let unfinished = false; // AI 回复未完成
+
+      // 发起 POST 流式请求
+      async function streamChat() {
+        // 用户输入
+        const userMessage = getInputContent();
+        if (!userMessage || unfinished) return;
+        // 标识正在回复
+        unfinished = true;
+
+        // 清空缓冲区
+        clearBuffer()
+
+        document.getElementById("input").value = '';
+        handleButtonStatus();
+
+        // 用户说话
+        const userPara = document.createElement("div");
+        userPara.textContent = userMessage;
+        appendMessagesDom(userPara, 'user-ask')
+
+        // 保持滚动到底部
+        handleScrollBottom();
+
+        try {
+          const response = await fetch("http://localhost:3000/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json", // 请求体为 JSON
+              Accept: "text/event-stream", // 期望服务端返回 SSE 格式
+              "x-session-id": "08a0dfdb-bc39-4d21-bfa6-5810f87c56a8" // 会话ID
+            },
+            body: JSON.stringify({
+              message: userMessage, // 传递 message 参数
+            }),
+          });
+
+          // 检查响应状态
+          if (!response.ok) {
+            throw new Error(`HTTP错误: ${response.status}`);
+          }
+
+          // 获取流式读取器
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder(); // 用于解码二进制流为字符串
+          let sseBuffer = ""; // 缓冲不完整的数据块
+
+          // 回复dom结构
+          const resContainer = document.createElement("div");
+          resContainer.className = "markdown-content"; // 添加样式类
+          appendMessagesDom(resContainer, "deepseek-res");
+
+          // 循环读取流数据
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break; // 流结束时退出循环
+
+            // 解码并处理数据块
+            sseBuffer += decoder.decode(value, { stream: true });
+
+            // 按 SSE 格式分割事件（按 "\n\n" 分隔）
+            const events = sseBuffer.split("\n\n");
+            sseBuffer = events.pop() || ""; // 保留未完成的部分
+
+            for (const event of events) {
+              // 解析单个事件（格式为 data: {"content":"..."}）
+              const line = event.trim();
+              if (!line.startsWith("data: ")) continue;
+
+              const message = line.replace(/^data: /, "");
+              // 结束标记
+              if (message === "[DONE]") {
+                unfinished = false;
+                return;
+              }
+
+              try {
+                const data = JSON.parse(message);
+                if (data.content) {
+                  buffer += data.content;
+                  
+                  // 全量渲染更新 Markdown
+                  renderMarkdown(resContainer);
+
+                  // 分段渲染更新 Markdown
+                  // renderMarkdownSplit(resContainer);
+                }
+              } catch (e) {
+                console.error("解析错误:", e);
+              }
+            }
+          }
+          unfinished = false;
+        } catch (e) {
+          unfinished = false;
+          console.error("请求失败:", e);
+        }
+      }
+
+      // 清空缓冲区
+      const clearBuffer = () => {
+        fullBuffer = "";
+        buffer = "";
+      }
+
+      // 添加 dom 结构
+      const appendMessagesDom = (dom, className) => {
+        const domParent = document.createElement("div");
+        domParent.className = className;
+        domParent.appendChild(dom);
+        document.getElementById("stream-output").appendChild(domParent)
+      }
+
+    </script>
+  </body>
+</html>
