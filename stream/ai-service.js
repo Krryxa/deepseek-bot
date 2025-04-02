@@ -88,14 +88,10 @@ class AIService {
 
     return new Promise((resolve, reject) => {
       let fullContent = "";
-      let buffer = ""; // 缓冲区
 
       response.data.on("data", (chunk) => {
-        buffer += chunk.toString();
-
         // 按行分割
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
+        const lines = chunk.toString().split("\n").filter((line) => line.trim());
 
         for (const line of lines) {
           const trimmedLine = line.trim();
@@ -123,9 +119,6 @@ class AIService {
       });
 
       response.data.on("end", () => {
-        if (buffer) {
-          console.warn("未处理的缓冲区数据:", buffer);
-        }
         resolve(fullContent);
       });
 
