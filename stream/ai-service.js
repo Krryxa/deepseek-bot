@@ -129,7 +129,7 @@ class AIService {
     });
   }
 
-  // 历史消息截断
+  // 历史消息截断，保留 system prompt
   trimHistory(messages) {
     const systemMsg = messages[0];
     messages.splice(1, messages.length - this.config.maxHistory - 1);
