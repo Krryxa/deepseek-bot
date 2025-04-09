@@ -73,7 +73,7 @@ body {
 }
 #stream-output .user-ask > div,
 #stream-output .deepseek-res > div {
-  max-width: 70%;
+  max-width: 80%;
   padding: 10px 18px;
   border-radius: 8px;
 }
