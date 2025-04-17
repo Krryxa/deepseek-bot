@@ -6,7 +6,7 @@ class AIService {
       apiKey,
       endpoint: "https://api.deepseek.com/chat/completions",
       model: "deepseek-chat",
-      maxHistory: 10, // 保留最近5轮对话
+      maxHistory: 5, // 保留最近5轮对话
     };
 
     // 会话存储（生产环境建议用Redis）
@@ -130,9 +130,10 @@ class AIService {
   }
 
   // 历史消息截断，保留 system prompt
+  // 刚好是在AI回复之后（每一轮都是完整对话）才截取，可以刚好保证剩余的对话也是完整的（user、assistant）
   trimHistory(messages) {
     const systemMsg = messages[0];
-    messages.splice(1, messages.length - this.config.maxHistory - 1);
+    messages.splice(1, messages.length - (this.config.maxHistory * 2) - 1);
   }
 
   // 消息长度限制
